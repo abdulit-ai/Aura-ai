@@ -2,202 +2,121 @@ import streamlit as st
 import google.generativeai as genai
 import requests
 import urllib.parse
+import time
 
-# --- PAGE CONFIGURATION ---
-st.set_page_config(page_title="Aura AI | Studio", page_icon="🌌", layout="wide")
+# --- 2026 MODEL CONFIGURATION ---
+# Using the new Gemini 3.1 series for maximum reasoning and speed
+PRO_MODEL = "gemini-3.1-pro-preview"
+FLASH_MODEL = "gemini-3.1-flash-preview"
 
-# --- CUSTOM CSS (UI/UX SPECIFICATIONS) ---
+# --- PAGE CONFIG ---
+st.set_page_config(page_title="Aura AI | Studio 2026", page_icon="🌀", layout="wide")
+
+# --- PREMIUM SaaS UI (CSS) ---
 st.markdown("""
     <style>
-    /* Hide Default Streamlit Elements */
-    #MainMenu {visibility: hidden;}
-    header {visibility: hidden;}
-    footer {visibility: hidden;}
-    .stDeployButton {display:none;}
+    #MainMenu, header, footer, .stDeployButton {visibility: hidden;}
+    .stApp { background-color: #F8FAF8; }
     
-    /* Theme Setup */
-    .stApp {
-        background-color: #F8FAF8;
-    }
-    
-    /* Sticky Navbar & Spinning Logo */
+    /* Sticky Navbar */
     .navbar {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        background: rgba(255, 255, 255, 0.8);
-        backdrop-filter: blur(10px);
-        padding: 15px 30px;
-        z-index: 9999;
-        display: flex;
-        align-items: center;
-        border-bottom: 1px solid rgba(79, 70, 229, 0.2);
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        position: fixed; top: 0; left: 0; width: 100%;
+        background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px);
+        padding: 15px 40px; z-index: 9999; display: flex; align-items: center;
+        border-bottom: 1px solid #4F46E533; box-shadow: 0 4px 12px rgba(0,0,0,0.03);
     }
-    .logo-container {
-        display: flex;
-        align-items: center;
-        gap: 15px;
+    .spinning-logo {
+        width: 32px; height: 32px; border: 4px solid #4F46E5;
+        border-top: 4px solid transparent; border-radius: 50%;
+        animation: spin 2s linear infinite; margin-right: 15px;
     }
-    .spinning-spiral {
-        width: 30px;
-        height: 30px;
-        border: 4px solid #4F46E5;
-        border-top: 4px solid transparent;
-        border-radius: 50%;
-        animation: spin 1.5s linear infinite;
-    }
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-    .brand-name {
-        color: #4F46E5;
-        font-size: 24px;
-        font-weight: 800;
-        font-family: 'Inter', sans-serif;
-        margin: 0;
-    }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    .brand { color: #4F46E5; font-size: 26px; font-weight: 900; letter-spacing: -1px; }
 
-    /* Padding for main content to clear sticky navbar */
-    .main .block-container {
-        padding-top: 100px;
-    }
-
-    /* Glassmorphism Cards for Buttons */
+    /* Glassmorphism Cards */
     div.stButton > button {
-        background: rgba(255, 255, 255, 0.4);
-        border: 1px solid rgba(255, 255, 255, 0.4);
-        box-shadow: 0 8px 32px 0 rgba(79, 70, 229, 0.1);
-        backdrop-filter: blur(8px);
-        border-radius: 15px;
-        color: #333;
-        font-weight: 600;
-        height: 120px;
-        width: 100%;
-        transition: all 0.3s ease;
+        background: white; border: 1px solid #E2E8F0;
+        border-radius: 18px; color: #1E293B; height: 110px; width: 100%;
+        font-weight: 700; font-size: 17px; transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     }
     div.stButton > button:hover {
-        background: #4F46E5;
-        color: white;
-        transform: translateY(-5px);
-        box-shadow: 0 12px 40px 0 rgba(79, 70, 229, 0.3);
-        border: 1px solid #4F46E5;
+        background: #4F46E5; color: white; transform: translateY(-6px);
+        box-shadow: 0 15px 30px rgba(79, 70, 229, 0.25); border-color: #4F46E5;
     }
+    .main .block-container { padding-top: 100px; }
     </style>
     
     <div class="navbar">
-        <div class="logo-container">
-            <div class="spinning-spiral"></div>
-            <h1 class="brand-name">Aura AI</h1>
-        </div>
+        <div class="spinning-logo"></div>
+        <div class="brand">Aura AI</div>
     </div>
 """, unsafe_allow_html=True)
 
-# --- SESSION STATE (SPA ROUTING) ---
-if 'current_page' not in st.session_state:
-    st.session_state.current_page = 'Dashboard'
+# --- APP LOGIC & ROUTING ---
+if 'page' not in st.session_state: st.session_state.page = 'Dashboard'
+if 'key' not in st.session_state: st.session_state.key = st.secrets.get("api_key", "")
 
-def navigate(page):
-    st.session_state.current_page = page
-
-# --- HELPER FUNCTIONS ---
-def generate_ai_response(prompt, model_type, system_instruction):
-    api_key = st.session_state.get('api_key', '')
-    if not api_key:
-        return "Error: Please enter your Google API Key in the sidebar."
-    
+def run_ai(prompt, model_name, instruction):
+    if not st.session_state.key:
+        return "⚠️ Error: Please enter your Google API Key in the sidebar."
     try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel(
-            model_name=model_type,
-            system_instruction=system_instruction
-        )
+        genai.configure(api_key=st.session_state.key)
+        model = genai.GenerativeModel(model_name=model_name, system_instruction=instruction)
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
-        if '429' in str(e):
-            return "⚠️ **System Busy:** We are currently experiencing high traffic. Please wait a moment and try again."
-        return f"Error: {str(e)}"
+        if "429" in str(e): return "⏳ System Busy. Google's Free Tier is rate-limited. Wait 60s."
+        return f"❌ Error: {str(e)}"
 
-def generate_image(prompt):
-    encoded_prompt = urllib.parse.quote(prompt)
-    url = f"https://image.pollinations.ai/prompt/{encoded_prompt}"
-    return url
-
-# --- SIDEBAR (SECURITY) ---
+# --- SIDEBAR ---
 with st.sidebar:
-    st.markdown("### 🔐 Security & Settings")
-    api_key = st.text_input("Google API Key", type="password", placeholder="Enter Gemini API Key")
-    if api_key:
-        st.session_state.api_key = api_key
-    
+    st.title("⚙️ Settings")
+    input_key = st.text_input("Gemini API Key", value=st.session_state.key, type="password")
+    if input_key: st.session_state.key = input_key
     st.divider()
-    if st.button("🏠 Return to Dashboard", use_container_width=True):
-        navigate('Dashboard')
+    if st.button("🏠 Back to Dashboard"): 
+        st.session_state.page = 'Dashboard'
         st.rerun()
 
-# --- APP ROUTING & LOGIC ---
-if st.session_state.current_page == 'Dashboard':
-    st.markdown("## Welcome to your Studio")
-    st.markdown("Select a tool below to begin your workflow.")
-    
-    col1, col2, col3, col4, col5 = st.columns(5)
-    
-    with col1:
-        if st.button("🕵️ AI Detector"): navigate('AI Detector'); st.rerun()
-        if st.button("💬 AI Chat"): navigate('AI Chat'); st.rerun()
-    with col2:
-        if st.button("🧠 Humanizer"): navigate('Humanizer'); st.rerun()
-        if st.button("🎨 Image Gen"): navigate('Image Gen'); st.rerun()
-    with col3:
-        if st.button("🔍 Plagiarism"): navigate('Plagiarism'); st.rerun()
-        if st.button("🌍 Translator"): navigate('Translator'); st.rerun()
-    with col4:
-        if st.button("🔄 Paraphraser"): navigate('Paraphraser'); st.rerun()
-        if st.button("✂️ Summarizer"): navigate('Summarizer'); st.rerun()
-    with col5:
-        if st.button("✅ Grammar"): navigate('Grammar'); st.rerun()
-        if st.button("📚 Citations"): navigate('Citations'); st.rerun()
+# --- VIEWS ---
+tools = {
+    "AI Detector": (PRO_MODEL, "Analyze text for AI patterns. Provide a probability score."),
+    "Humanizer": (PRO_MODEL, "Rewrite text to sound 100% human. Vary sentence length and use natural idioms."),
+    "Summarizer": (FLASH_MODEL, "Summarize into 3 bullet points."),
+    "Grammar": (FLASH_MODEL, "Fix all errors. Output corrected text only."),
+    "AI Chat": (PRO_MODEL, "You are Aura, a brilliant SaaS assistant."),
+    "Translator": (FLASH_MODEL, "Translate to English, or Spanish if already English."),
+    "Paraphraser": (FLASH_MODEL, "Rephrase creatively while keeping the meaning."),
+    "Plagiarism": (FLASH_MODEL, "Act as a text originality analyzer."),
+    "Citations": (FLASH_MODEL, "Generate APA/MLA citations for the provided source."),
+    "Image Gen": ("POLLINATIONS", "")
+}
 
+if st.session_state.page == 'Dashboard':
+    st.markdown("## 🌌 Your AI Workspace")
+    t_list = list(tools.keys())
+    for r in range(0, 10, 5):
+        cols = st.columns(5)
+        for i in range(5):
+            with cols[i]:
+                if st.button(t_list[r+i]):
+                    st.session_state.page = t_list[r+i]
+                    st.rerun()
 else:
-    # --- INDIVIDUAL TOOL WORKSPACES ---
-    tool = st.session_state.current_page
-    st.markdown(f"## {tool}")
+    # Tool Page
+    current = st.session_state.page
+    st.subheader(f"Tool: {current}")
+    user_input = st.text_area("Input Area", height=250, placeholder=f"Enter text for {current}...")
     
-    user_input = st.text_area("Enter your text/prompt here:", height=200)
-    
-    if st.button(f"Run {tool}", type="primary"):
-        if not user_input:
-            st.warning("Please provide input text.")
+    if st.button(f"✨ Run {current}", type="primary"):
+        if not user_input: st.warning("Please enter text.")
         else:
             with st.spinner("Processing..."):
-                # Tool Logic Configuration
-                if tool == 'Humanizer':
-                    result = generate_ai_response(user_input, "gemini-1.5-pro", "You are an expert copywriter. Rewrite the provided text to maximize burstiness and perplexity, making it completely indistinguishable from high-level human writing. Remove robotic transitions.")
-                elif tool == 'AI Detector':
-                    result = generate_ai_response(user_input, "gemini-1.5-pro", "You are a highly advanced AI detection system. Analyze the text and provide a probability percentage of it being AI-generated, followed by a breakdown of the specific syntactic markers that led to your conclusion.")
-                elif tool == 'AI Chat':
-                    result = generate_ai_response(user_input, "gemini-1.5-pro", "You are Aura AI, a professional, high-end SaaS assistant. Be concise, brilliant, and helpful.")
-                elif tool == 'Summarizer':
-                    result = generate_ai_response(user_input, "gemini-1.5-flash", "You are a professional editor. Summarize the text concisely, extracting only the most critical bullet points and a brief overview.")
-                elif tool == 'Grammar':
-                    result = generate_ai_response(user_input, "gemini-1.5-flash", "You are a strict proofreader. Fix all grammatical, spelling, and punctuation errors in the text. Output the corrected text only.")
-                elif tool == 'Translator':
-                    # Simplified for demo: auto-detects and translates to English if foreign, or asks for target.
-                    result = generate_ai_response(user_input, "gemini-1.5-flash", "You are a master linguist. If the text is not English, translate it to English. If it is English, translate it to Spanish, French, and Japanese in a clean format.")
-                elif tool == 'Citations':
-                    result = generate_ai_response(user_input, "gemini-1.5-flash", "Generate perfect APA, MLA, and Chicago style citations based on the provided text, link, or source details.")
-                elif tool == 'Plagiarism':
-                    result = generate_ai_response(user_input, "gemini-1.5-flash", "You are a plagiarism detection tool. While you cannot search the live web, analyze the text for highly common cliches, heavily reused academic phrasing, and provide a mock originality score based on statistical likelihood.")
-                elif tool == 'Paraphraser':
-                    result = generate_ai_response(user_input, "gemini-1.5-flash", "You are a master wordsmith. Paraphrase the text to improve flow and clarity while retaining the exact original meaning.")
-                elif tool == 'Image Gen':
-                    image_url = generate_image(user_input)
-                    st.image(image_url, caption="Generated by Aura AI (Pollinations Engine)", use_column_width=True)
-                    result = "Image generated successfully."
-                
-                if tool != 'Image Gen':
+                if current == "Image Gen":
+                    url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(user_input)}?nologo=true"
+                    st.image(url, caption="Generated by Aura AI", use_container_width=True)
+                else:
+                    m, inst = tools[current]
+                    res = run_ai(user_input, m, inst)
                     st.markdown("### Result")
-                    st.info(result)
+                    st.info(res)
