@@ -2,15 +2,13 @@ import streamlit as st
 import google.generativeai as genai
 import requests
 import urllib.parse
-import time
 
-# --- 2026 MODEL CONFIGURATION ---
-# Using the new Gemini 3.1 series for maximum reasoning and speed
-PRO_MODEL = "gemini-3.1-pro-preview"
-FLASH_MODEL = "gemini-3.1-flash-preview"
+# --- STABLE MODEL CONFIGURATION ---
+# Using the stable, high-speed Flash engine for ALL tools to bypass free-tier blocks
+MODEL_NAME = "gemini-1.5-flash"
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="Aura AI | Studio 2026", page_icon="🌀", layout="wide")
+st.set_page_config(page_title="Aura AI | Studio", page_icon="🌀", layout="wide")
 
 # --- PREMIUM SaaS UI (CSS) ---
 st.markdown("""
@@ -18,7 +16,6 @@ st.markdown("""
     #MainMenu, header, footer, .stDeployButton {visibility: hidden;}
     .stApp { background-color: #F8FAF8; }
     
-    /* Sticky Navbar */
     .navbar {
         position: fixed; top: 0; left: 0; width: 100%;
         background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px);
@@ -33,7 +30,6 @@ st.markdown("""
     @keyframes spin { 100% { transform: rotate(360deg); } }
     .brand { color: #4F46E5; font-size: 26px; font-weight: 900; letter-spacing: -1px; }
 
-    /* Glassmorphism Cards */
     div.stButton > button {
         background: white; border: 1px solid #E2E8F0;
         border-radius: 18px; color: #1E293B; height: 110px; width: 100%;
@@ -53,26 +49,33 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- APP LOGIC & ROUTING ---
-if 'page' not in st.session_state: st.session_state.page = 'Dashboard'
-if 'key' not in st.session_state: st.session_state.key = st.secrets.get("api_key", "")
+if 'page' not in st.session_state: 
+    st.session_state.page = 'Dashboard'
+if 'key' not in st.session_state: 
+    try:
+        st.session_state.key = st.secrets["api_key"]
+    except:
+        st.session_state.key = ""
 
-def run_ai(prompt, model_name, instruction):
+def run_ai(prompt, instruction):
     if not st.session_state.key:
         return "⚠️ Error: Please enter your Google API Key in the sidebar."
     try:
         genai.configure(api_key=st.session_state.key)
-        model = genai.GenerativeModel(model_name=model_name, system_instruction=instruction)
+        model = genai.GenerativeModel(model_name=MODEL_NAME, system_instruction=instruction)
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
-        if "429" in str(e): return "⏳ System Busy. Google's Free Tier is rate-limited. Wait 60s."
+        if "429" in str(e): 
+            return "⏳ System Busy. Google's Free Tier is rate-limited. Wait 60s."
         return f"❌ Error: {str(e)}"
 
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("⚙️ Settings")
     input_key = st.text_input("Gemini API Key", value=st.session_state.key, type="password")
-    if input_key: st.session_state.key = input_key
+    if input_key: 
+        st.session_state.key = input_key
     st.divider()
     if st.button("🏠 Back to Dashboard"): 
         st.session_state.page = 'Dashboard'
@@ -80,16 +83,16 @@ with st.sidebar:
 
 # --- VIEWS ---
 tools = {
-    "AI Detector": (PRO_MODEL, "Analyze text for AI patterns. Provide a probability score."),
-    "Humanizer": (PRO_MODEL, "Rewrite text to sound 100% human. Vary sentence length and use natural idioms."),
-    "Summarizer": (FLASH_MODEL, "Summarize into 3 bullet points."),
-    "Grammar": (FLASH_MODEL, "Fix all errors. Output corrected text only."),
-    "AI Chat": (PRO_MODEL, "You are Aura, a brilliant SaaS assistant."),
-    "Translator": (FLASH_MODEL, "Translate to English, or Spanish if already English."),
-    "Paraphraser": (FLASH_MODEL, "Rephrase creatively while keeping the meaning."),
-    "Plagiarism": (FLASH_MODEL, "Act as a text originality analyzer."),
-    "Citations": (FLASH_MODEL, "Generate APA/MLA citations for the provided source."),
-    "Image Gen": ("POLLINATIONS", "")
+    "AI Detector": "Analyze text for AI patterns. Provide a probability score.",
+    "Humanizer": "Rewrite text to sound 100% human. Vary sentence length and use natural idioms.",
+    "Summarizer": "Summarize into 3 bullet points.",
+    "Grammar": "Fix all errors. Output corrected text only.",
+    "AI Chat": "You are Aura, a brilliant SaaS assistant.",
+    "Translator": "Translate to English, or Spanish if already English.",
+    "Paraphraser": "Rephrase creatively while keeping the meaning.",
+    "Plagiarism": "Act as a text originality analyzer.",
+    "Citations": "Generate APA/MLA citations for the provided source.",
+    "Image Gen": "POLLINATIONS"
 }
 
 if st.session_state.page == 'Dashboard':
@@ -103,20 +106,20 @@ if st.session_state.page == 'Dashboard':
                     st.session_state.page = t_list[r+i]
                     st.rerun()
 else:
-    # Tool Page
     current = st.session_state.page
     st.subheader(f"Tool: {current}")
     user_input = st.text_area("Input Area", height=250, placeholder=f"Enter text for {current}...")
     
     if st.button(f"✨ Run {current}", type="primary"):
-        if not user_input: st.warning("Please enter text.")
+        if not user_input: 
+            st.warning("Please enter text.")
         else:
             with st.spinner("Processing..."):
                 if current == "Image Gen":
                     url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(user_input)}?nologo=true"
                     st.image(url, caption="Generated by Aura AI", use_container_width=True)
                 else:
-                    m, inst = tools[current]
-                    res = run_ai(user_input, m, inst)
+                    inst = tools[current]
+                    res = run_ai(user_input, inst)
                     st.markdown("### Result")
                     st.info(res)
