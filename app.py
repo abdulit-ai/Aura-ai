@@ -3,9 +3,8 @@ import google.generativeai as genai
 import requests
 import urllib.parse
 
-# --- STABLE MODEL CONFIGURATION ---
-# Using the stable, high-speed Flash engine for ALL tools to bypass free-tier blocks
-MODEL_NAME = "gemini-1.5-flash"
+# --- THE ACTUAL, REAL, ALIVE 2026 MODEL ---
+MODEL_NAME = "gemini-2.5-flash"
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Aura AI | Studio", page_icon="🌀", layout="wide")
